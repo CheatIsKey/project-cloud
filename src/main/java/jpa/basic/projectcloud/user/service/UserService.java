@@ -17,6 +17,7 @@ public class UserService {
 
     private final UserRepository userRepository;
 
+    @Transactional
     public UserResponse save(CreateUserRequest request) {
         User user = new User(request.name(), request.age(), request.mbti());
 
@@ -30,5 +31,9 @@ public class UserService {
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_FOUND_USER));
 
         return UserResponse.from(user);
+    }
+
+    public User findUserById(Long userId) {
+        return userRepository.getReferenceById(userId);
     }
 }

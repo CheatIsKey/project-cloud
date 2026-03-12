@@ -81,8 +81,8 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/my-app:latest
-            docker stop my-app || true
-            docker rm my-app || true
+            docker ps -q --filter "publish=8080" | xargs -r docker stop
+            docker ps -aq --filter "publish=8080" | xargs -r docker rm
             docker run -d \
               --name my-app \
               -p 8080:8080 \

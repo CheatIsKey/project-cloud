@@ -67,7 +67,7 @@ jobs:
           IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/my-app
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $IMAGE_NAME:$IMAGE_TAG .
+          docker buildx build --platform linux/arm64 -t $IMAGE_NAME:$IMAGE_TAG .
           docker tag  $IMAGE_NAME:$IMAGE_TAG $IMAGE_NAME:latest
           docker push $IMAGE_NAME:$IMAGE_TAG
           docker push $IMAGE_NAME:latest

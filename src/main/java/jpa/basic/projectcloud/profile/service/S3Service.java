@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.net.URL;
 import java.time.Duration;
 import java.util.UUID;
 
@@ -30,6 +29,9 @@ public class S3Service {
 
     @Value("${S3_BUCKET_NAME}")
     private String bucket;
+
+    @Value("${CLOUDFRONT_DOMAIN}")
+    private String cloudFrontDomain;
 
     @Transactional
     public String upload(Long userId, MultipartFile file) {
@@ -50,10 +52,10 @@ public class S3Service {
         }
     }
 
-    public URL getDownloadUrl(Long userId) {
+    public String getDownloadUrl(Long userId) {
         String key = profileRepository.findKeyByUserId(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PROFILE_NOT_FOUND));
 
-        return s3Template.createSignedGetURL(bucket, key, PRESIGNED_URL_EXPIRATION);
+        return "https://" + cloudFrontDomain + "/" + key;
     }
 }

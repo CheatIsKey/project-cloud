@@ -8,7 +8,7 @@
 [![Spring Cloud AWS](https://img.shields.io/badge/Spring%20Cloud%20AWS-4.0.0-blue?style=flat-square&logo=amazonaws)](https://awspring.io/)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0-blue?style=flat-square&logo=mysql)](https://www.mysql.com/)
 [![Gradle](https://img.shields.io/badge/Gradle-8.x-02303A?style=flat-square&logo=gradle)](https://gradle.org/)
-[![AWS](https://img.shields.io/badge/AWS-EC2%20%7C%20RDS%20%7C%20S3%20%7C%20ALB-FF9900?style=flat-square&logo=amazonaws)](https://aws.amazon.com/)
+[![AWS](https://img.shields.io/badge/AWS-EC2%20%7C%20RDS%20%7C%20S3%20%7C%20ALB%20%7C%20CloudFront-FF9900?style=flat-square&logo=amazonaws)](https://aws.amazon.com/)
 
 ---
 
@@ -27,6 +27,7 @@
 | **LV 3** | S3 프로필 사진 업로드 / Presigned URL 다운로드 | S3, IAM Role |
 | **LV 4** | Docker 컨테이너화 + GitHub Actions CI/CD | Docker, GitHub Actions |
 | **LV 5** | ALB + Auto Scaling + HTTPS 도메인 연결 | ALB, ASG, ACM, Route 53 |
+| **LV 6** | CloudFront CDN 구축 — S3 Presigned URL → CloudFront URL 전환 | CloudFront, OAC |
 
 ---
 
@@ -354,6 +355,61 @@ EC2 인스턴스가 자동으로 자격증명을 관리하므로 키 유출 위�
 
 ---
 
+### LV 6 — CloudFront CDN 구축
+
+#### 🌍 CloudFront 배포 구성
+
+S3 Presigned URL 방식 대신 **CloudFront**를 원본으로 하는 CDN 배포로 전환합니다.  
+OAC(Origin Access Control)를 사용해 S3에 직접 접근을 차단하고, CloudFront를 통해서만 이미지를 제공합니다.
+
+**CloudFront 배포 정보:**
+- 배포 도메인: `https://dnapymaa2h16i.cloudfront.net`
+- 원본(Origin): S3 버킷 (`cloud-project-prod-uploads`)
+- 원본 액세스: OAC (Origin Access Control) — S3 퍼블릭 접근 완전 차단
+
+**S3 버킷 정책 (OAC 전용 허용):**
+```json
+{
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": { "Service": "cloudfront.amazonaws.com" },
+    "Action": "s3:GetObject",
+    "Resource": "arn:aws:s3:::cloud-project-prod-uploads/*",
+    "Condition": {
+      "StringEquals": {
+        "AWS:SourceArn": "arn:aws:cloudfront::883886327005:distribution/E2J4X00I7SPBTL"
+      }
+    }
+  }]
+}
+```
+
+#### 🔄 백엔드 코드 변경 (Presigned URL → CloudFront URL)
+
+기존 S3 Presigned URL 생성 로직을 제거하고, CloudFront 도메인으로 단순 URL 조합 방식으로 변경합니다.
+
+**변경 전 (Presigned URL):**
+```
+https://cloud-project-prod-uploads.s3.ap-northeast-2.amazonaws.com/uploads/uuid_file.png?X-Amz-...
+```
+
+**변경 후 (CloudFront URL):**
+```
+https://dnapymaa2h16i.cloudfront.net/uploads/uuid_file.png
+```
+
+CloudFront 도메인은 AWS Parameter Store `/cloud-project-app/prod/CLOUDFRONT_DOMAIN`에서 주입받습니다.
+
+#### ✅ CloudFront 이미지 URL
+
+> 실제 업로드된 프로필 사진 조회 URL:
+```
+https://dnapymaa2h16i.cloudfront.net/uploads/ebee2fe2-98f1-412e-a124-c33ea8cbd7e4_test_Coverage.png
+```
+
+---
+
+
 ## 🎓 배운 점 및 회고
 
 ### 1. 로컬 H2 / 운영 MySQL로 Profile 분리
@@ -392,7 +448,15 @@ EC2 인스턴스가 자동으로 자격증명을 관리하므로 키 유출 위�
 > RDS 인바운드에 IP 대신 EC2 보안 그룹 ID만 허용합니다.  
 > 새 EC2가 추가되거나 IP가 변경되어도 자동으로 허용되며,  
 > EC2를 통하지 않는 모든 외부 접근은 원천 차단됩니다.
- 
+
+### 6. CloudFront CDN으로 이미지 서빙 최적화
+
+> **"Presigned URL은 매번 새로 발급해야 하고, 만료되면 접근이 불가능하다"**
+>
+> S3 Presigned URL은 유효기간이 있어 만료 시 재발급이 필요하고, 긴 URL에 인증 파라미터가 노출됩니다.  
+> CloudFront를 CDN으로 앞에 두면 URL이 단순해지고, 엣지 캐싱으로 응답 속도도 빨라집니다.  
+> OAC 설정으로 S3 버킷은 완전 비공개를 유지하면서 CloudFront를 통해서만 이미지를 안전하게 제공합니다.
+
 ---
 
 ## 📚 주요 구현 요약
@@ -405,3 +469,4 @@ EC2 인스턴스가 자동으로 자격증명을 관리하므로 키 유출 위�
 | 3 | S3 업로드, Presigned URL 발급 | S3, IAM Role | `GET /api/members/{id}/profile-image` |
 | 4 | Docker 컨테이너화, GitHub Actions CI/CD | Docker, Actions | 코드 Push → EC2 자동 반영 |
 | 5 | ALB + ASG + HTTPS 도메인 | ALB, ACM, Route 53 | `https://api.spring-jpa.dev` 접속 |
+| 6 | CloudFront CDN 구축, Presigned URL → CloudFront URL 전환 | CloudFront, OAC | `GET /api/members/{id}/profile-image` → `cloudfront.net` URL 반환 |

@@ -33,3 +33,4 @@ spring:
 S3_BUCKET_NAME: test-bucket
 APP_MESSAGE: local-test
 TEAM-NAME: local-team
+CLOUDFRONT_DOMAIN: dnapymaa2h16i.cloudfront.net
